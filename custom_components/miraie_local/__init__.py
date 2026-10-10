@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import (
     CONF_DEVICE_ID,
@@ -16,16 +17,27 @@ from .const import (
     DEFAULT_MULTICAST,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
+    MANUFACTURER,
+    MODEL,
 )
 from .coordinator import MirAIeLocalCoordinator
 from .transport import MirAIeLocalTransport
 
-__all__ = ["DOMAIN", "MirAIeLocalConfigEntry"]
+__all__ = ["DOMAIN", "MirAIeLocalConfigEntry", "device_info"]
 
-# Task 8 (sensor) appends its platform here.
-PLATFORMS: list[Platform] = [Platform.CLIMATE]
+PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR]
 
 MirAIeLocalConfigEntry = ConfigEntry[MirAIeLocalCoordinator]
+
+
+def device_info(entry: ConfigEntry) -> DeviceInfo:
+    """The device registry entry shared by every entity of this AC."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name="Panasonic AC",
+        manufacturer=MANUFACTURER,
+        model=MODEL,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: MirAIeLocalConfigEntry) -> bool:

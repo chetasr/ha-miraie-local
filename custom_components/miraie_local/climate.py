@@ -24,12 +24,10 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import MirAIeLocalConfigEntry
-from .const import DOMAIN, MANUFACTURER, MODEL
+from . import MirAIeLocalConfigEntry, device_info
 from .coordinator import MirAIeLocalCoordinator
 from .protocol import FAN_MODES, command
 
@@ -90,12 +88,7 @@ class MirAIeClimate(CoordinatorEntity[MirAIeLocalCoordinator], ClimateEntity):
         """Attach to the coordinator that holds the latest status."""
         super().__init__(coordinator)
         self._attr_unique_id = entry.data.get("device_id", entry.entry_id)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="Panasonic AC",
-            manufacturer=MANUFACTURER,
-            model=MODEL,
-        )
+        self._attr_device_info = device_info(entry)
 
     # ---- state, read from the latest status broadcast -------------------
 
