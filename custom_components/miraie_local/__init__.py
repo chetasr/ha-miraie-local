@@ -22,8 +22,8 @@ from .transport import MirAIeLocalTransport
 
 __all__ = ["DOMAIN", "MirAIeLocalConfigEntry"]
 
-# Task 7 (climate) and Task 8 (sensor) append their platforms here.
-PLATFORMS: list[Platform] = []
+# Task 8 (sensor) appends its platform here.
+PLATFORMS: list[Platform] = [Platform.CLIMATE]
 
 MirAIeLocalConfigEntry = ConfigEntry[MirAIeLocalCoordinator]
 
