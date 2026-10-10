@@ -34,13 +34,25 @@ def test_manifest_has_required_keys():
     assert m["iot_class"] == "local_push"
 
 
+def test_manifest_keys_are_sorted_as_hassfest_requires():
+    """hassfest wants domain, name, then the rest alphabetically."""
+    m = json.loads(MANIFEST_PATH.read_text())
+    keys = list(m)
+
+    assert keys[0] == "domain"
+    assert keys[1] == "name"
+    assert keys[2:] == sorted(keys[2:])
+
+
 def test_manifest_metadata_values():
     m = json.loads(MANIFEST_PATH.read_text())
     assert m["codeowners"] == ["@chetasr"]
     assert m["integration_type"] == "device"
     assert m["config_flow"] is True
     assert m["quality_scale"] == "bronze"
-    assert m["requirements"] == ["cryptography>=41"]
+    # hassfest: cryptography is a Home Assistant core dependency, so a custom
+    # integration must NOT list it (doing so could force a conflicting version).
+    assert "requirements" not in m
     assert m["dependencies"] == ["network"]
     assert m["documentation"] == "https://github.com/chetasr/ha-miraie-local"
     assert m["issue_tracker"] == "https://github.com/chetasr/ha-miraie-local/issues"
