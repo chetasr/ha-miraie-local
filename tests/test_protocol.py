@@ -21,9 +21,9 @@ from custom_components.miraie_local.protocol import (
     parse_frame,
 )
 
-KEY = bytes(range(32))   # synthetic
-IV = bytes(range(16))    # synthetic
-DEV = "8c1419857fd4"     # deviceId is broadcast in cleartext, so not a secret
+KEY = bytes(range(32))  # synthetic
+IV = bytes(range(16))  # synthetic
+DEV = "8c1419857fd4"  # deviceId is broadcast in cleartext, so not a secret
 
 # Real 18-byte header observed on the wire from the physical unit:
 #   00 00 | 0c | 8c1419857fd4 | 02 | 0020   (direction 0x02 = device->app, 32-byte ciphertext)
@@ -32,17 +32,17 @@ REAL_HEADER = bytes.fromhex("00000c386331343139383537666434020020")
 
 def test_build_frame_layout_matches_real_wire_header():
     f = build_frame(KEY, IV, DEV, "DISC_RSP_B081844EA3A1", direction=DIR_DEV_TO_APP)
-    assert f[:18] == REAL_HEADER                 # header layout pinned to a real packet
+    assert f[:18] == REAL_HEADER  # header layout pinned to a real packet
     assert int.from_bytes(f[16:18], "big") == len(f) - 18
-    assert len(f[18:]) % 16 == 0              # ciphertext is block-aligned
-    assert len(f) % 16 == 2                    # 18-byte header + n*16 ciphertext
+    assert len(f[18:]) % 16 == 0  # ciphertext is block-aligned
+    assert len(f) % 16 == 2  # 18-byte header + n*16 ciphertext
 
 
 def test_build_frame_direction_and_length():
     f = build_frame(KEY, IV, DEV, '{"ps":"on"}', direction=DIR_APP_TO_DEVICE)
     assert f[:3] == b"\x00\x00\x0c"
     assert f[3:15] == DEV.encode()
-    assert f[15] == 0x01                          # app->device direction byte
+    assert f[15] == 0x01  # app->device direction byte
     assert int.from_bytes(f[16:18], "big") == len(f) - 18
 
 
@@ -58,17 +58,17 @@ def test_parse_frame_rejects_short_and_unaligned():
     with pytest.raises(ValueError):
         parse_frame(KEY, IV, REAL_HEADER[:10])
     with pytest.raises(ValueError):
-        parse_frame(KEY, IV, REAL_HEADER + b"\x01" * 17)   # not a multiple of 16
+        parse_frame(KEY, IV, REAL_HEADER + b"\x01" * 17)  # not a multiple of 16
 
 
 def test_parse_frame_rejects_bad_magic_idlength_and_declared_length():
     with pytest.raises(ValueError):
-        parse_frame(KEY, IV, b"\x01" + REAL_HEADER[1:])                     # magic != 0x00
+        parse_frame(KEY, IV, b"\x01" + REAL_HEADER[1:])  # magic != 0x00
     with pytest.raises(ValueError):
-        parse_frame(KEY, IV, REAL_HEADER[:2] + b"\x0b" + REAL_HEADER[3:])   # deviceId len != 12
+        parse_frame(KEY, IV, REAL_HEADER[:2] + b"\x0b" + REAL_HEADER[3:])  # deviceId len != 12
     bad_len = REAL_HEADER[:16] + (99).to_bytes(2, "big") + REAL_HEADER[18:]
     with pytest.raises(ValueError):
-        parse_frame(KEY, IV, bad_len)                                       # declared != actual
+        parse_frame(KEY, IV, bad_len)  # declared != actual
 
 
 def test_disc_req_is_zero_padded_to_32():
@@ -93,7 +93,7 @@ def test_command_rejects_unknown_kind_and_value():
     with pytest.raises(ValueError):
         command("nope")
     with pytest.raises(ValueError):
-        command("mode", "heat")      # the unit has no heat mode
+        command("mode", "heat")  # the unit has no heat mode
     with pytest.raises(ValueError):
         command("fan", "turbo")
     with pytest.raises(ValueError):
@@ -112,7 +112,7 @@ def test_parse_frame_rejects_empty_and_unaligned_ciphertext():
         parse_frame(KEY, IV, empty)  # declared 0 == actual 0 -> empty ciphertext
     unaligned = REAL_HEADER[:16] + (17).to_bytes(2, "big") + b"\x01" * 17
     with pytest.raises(ValueError):
-        parse_frame(KEY, IV, unaligned)                     # declared == actual, not block-aligned
+        parse_frame(KEY, IV, unaligned)  # declared == actual, not block-aligned
 
 
 def test_build_frame_rejects_bad_device_id_length():

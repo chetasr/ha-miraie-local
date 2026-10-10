@@ -236,9 +236,7 @@ async def test_setup_and_unload_stop_the_transport(
     assert coordinator.transport is None
 
 
-async def test_setup_uses_the_option_interval(
-    hass, enable_custom_integrations, fake_transport
-):
+async def test_setup_uses_the_option_interval(hass, enable_custom_integrations, fake_transport):
     """The poll interval comes from the options flow (D5)."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -283,9 +281,7 @@ async def test_changing_the_option_reloads_the_entry(
     assert entry.runtime_data.update_interval.total_seconds() == 30
 
 
-async def test_setup_failure_stops_the_transport(
-    hass, enable_custom_integrations, fake_transport
-):
+async def test_setup_failure_stops_the_transport(hass, enable_custom_integrations, fake_transport):
     """A silent AC on the first refresh must not leave the socket bound."""
     fake_transport.query_result = TimeoutError()
     entry = MockConfigEntry(

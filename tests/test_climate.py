@@ -73,9 +73,7 @@ async def test_turn_on_sends_cooling(hass, setup_entry, transport):
     assert sent(transport)[-1] == {"ki": 3, "acmd": "cool", "ps": "on"}
 
 
-async def test_set_hvac_mode_fan_only_maps_to_the_firmware_fan(
-    hass, setup_entry, transport
-):
+async def test_set_hvac_mode_fan_only_maps_to_the_firmware_fan(hass, setup_entry, transport):
     """Home Assistant spells it fan_only, the firmware spells it fan."""
     await hass.services.async_call(
         "climate",

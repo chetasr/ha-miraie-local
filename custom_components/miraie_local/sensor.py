@@ -76,9 +76,7 @@ async def async_setup_entry(
 ) -> None:
     """Add the diagnostic sensors for the configured AC."""
     coordinator = entry.runtime_data
-    async_add_entities(
-        MirAIeSensor(coordinator, entry, description) for description in SENSORS
-    )
+    async_add_entities(MirAIeSensor(coordinator, entry, description) for description in SENSORS)
 
 
 class MirAIeSensor(CoordinatorEntity[MirAIeLocalCoordinator], SensorEntity):
@@ -107,7 +105,7 @@ class MirAIeSensor(CoordinatorEntity[MirAIeLocalCoordinator], SensorEntity):
             return None
         try:
             number = float(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return str(value)
         if self.entity_description.zero_means_unknown and number == _UNKNOWN_TEMPERATURE:
             return None

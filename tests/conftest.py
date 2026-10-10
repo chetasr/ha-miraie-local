@@ -74,9 +74,7 @@ class FakeTransport:
 def transport(monkeypatch):
     """Replace the transport the integration builds, recording its payloads."""
     FakeTransport.instances = []
-    monkeypatch.setattr(
-        init_module, "MirAIeLocalTransport", lambda *a, **k: FakeTransport(*a, **k)
-    )
+    monkeypatch.setattr(init_module, "MirAIeLocalTransport", lambda *a, **k: FakeTransport(*a, **k))
     return FakeTransport
 
 

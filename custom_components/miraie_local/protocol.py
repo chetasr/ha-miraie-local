@@ -58,9 +58,7 @@ def build_frame(
     plaintext = payload.encode("ascii") if isinstance(payload, str) else payload
     device_bytes = device_id.encode("ascii")
     if len(device_bytes) != _DEVICE_ID_LEN:
-        raise ValueError(
-            f"deviceId must be {_DEVICE_ID_LEN} ASCII bytes, got {len(device_bytes)}"
-        )
+        raise ValueError(f"deviceId must be {_DEVICE_ID_LEN} ASCII bytes, got {len(device_bytes)}")
     if direction not in (DIR_APP_TO_DEVICE, DIR_DEV_TO_APP):
         raise ValueError(
             f"direction must be 0x{DIR_APP_TO_DEVICE:02x} or 0x{DIR_DEV_TO_APP:02x}, "

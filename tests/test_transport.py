@@ -328,9 +328,7 @@ async def test_async_query_sends_noop_and_returns_status(fake_loop):
     sent_frame, sent_addr = fake_loop.transport.sent[0]
     assert sent_addr == AC
     assert sent_frame[15] == DIR_APP_TO_DEVICE
-    assert json.loads(
-        transport_module.parse_frame(KEY, IV, sent_frame)[1].rstrip(b"\x00")
-    ) == {}
+    assert json.loads(transport_module.parse_frame(KEY, IV, sent_frame)[1].rstrip(b"\x00")) == {}
 
     transport.datagram_received(status_frame(), AC)
 

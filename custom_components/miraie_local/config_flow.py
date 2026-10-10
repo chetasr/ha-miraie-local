@@ -243,17 +243,14 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
             host = user_input.get(CONF_HOST, "").strip()
             if not host:
                 host = (
-                    await async_discover(
-                        self._cloud["ap_mac"], self._cloud[CONF_DEVICE_ID]
-                    )
-                    or ""
+                    await async_discover(self._cloud["ap_mac"], self._cloud[CONF_DEVICE_ID]) or ""
                 )
             if not host:
                 errors["base"] = "cannot_connect"
             else:
                 try:
                     await _async_probe(self.hass, self._cloud, host)
-                except (_CannotConnect, ValueError):
+                except _CannotConnect, ValueError:
                     errors["base"] = "cannot_connect"
                 else:
                     return self._async_create_entry(host)
@@ -283,7 +280,7 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 try:
                     await _async_probe(self.hass, data, data[CONF_HOST])
-                except (_CannotConnect, ValueError):
+                except _CannotConnect, ValueError:
                     errors["base"] = "cannot_connect"
                 else:
                     return self._async_create_entry(data[CONF_HOST], data)
@@ -356,9 +353,7 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
         entry_data[CONF_HOST] = host
         entry_data.setdefault(CONF_MULTICAST_IP, DEFAULT_MULTICAST)
         self._async_abort_entries_match({CONF_DEVICE_ID: entry_data[CONF_DEVICE_ID]})
-        return self.async_create_entry(
-            title=entry_data[CONF_DEVICE_ID], data=entry_data
-        )
+        return self.async_create_entry(title=entry_data[CONF_DEVICE_ID], data=entry_data)
 
     @staticmethod
     @callback
@@ -388,9 +383,7 @@ class MirAIeLocalOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self.config_entry.options.get(
-            CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
-        )
+        current = self.config_entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(

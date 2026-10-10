@@ -292,9 +292,9 @@ async def test_manual_rejects_a_bad_key_length(hass, enable_custom_integrations,
 
 async def test_duplicate_device_aborts(hass, enable_custom_integrations, cloud, no_network):
     """The same AC cannot be added twice."""
-    MockConfigEntry(
-        domain=DOMAIN, data={CONF_DEVICE_ID: DEVICE_ID, CONF_HOST: HOST}
-    ).add_to_hass(hass)
+    MockConfigEntry(domain=DOMAIN, data={CONF_DEVICE_ID: DEVICE_ID, CONF_HOST: HOST}).add_to_hass(
+        hass
+    )
 
     result = await start_user_flow(hass)
     result = await hass.config_entries.flow.async_configure(
@@ -376,17 +376,13 @@ async def test_options_default_is_the_silence_nudge(hass, enable_custom_integrat
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     schema = result["data_schema"].schema
-    default = next(
-        key.default() for key in schema if key.schema == CONF_POLL_INTERVAL
-    )
+    default = next(key.default() for key in schema if key.schema == CONF_POLL_INTERVAL)
     assert default == 30
 
 
 async def test_options_reject_a_too_short_interval(hass, enable_custom_integrations, no_network):
     """Below the 15 s floor voluptuous rejects the value."""
-    entry = MockConfigEntry(
-        domain=DOMAIN, data={CONF_DEVICE_ID: DEVICE_ID, CONF_HOST: HOST}
-    )
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_DEVICE_ID: DEVICE_ID, CONF_HOST: HOST})
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -583,7 +579,7 @@ async def test_e164_normalisation():
     assert cf._e164("9876543210") == "+919876543210"
     assert cf._e164("+919876543210") == "+919876543210"
     assert cf._e164("919876543210") == "+919876543210"
-    assert cf._e164(" 76839 14466 ") == "+919876543210"
+    assert cf._e164(" 98765 43210 ") == "+919876543210"
 
 
 async def test_hex_validation():

@@ -37,6 +37,7 @@ either style, whereas mixing the two fails with ``EADDRINUSE``.
 ``loop.create_datagram_endpoint`` refuses both options at once, so the socket is
 created here and handed over via ``sock=``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -113,9 +114,7 @@ class _ReceiveProtocol(asyncio.DatagramProtocol):
         self._generation = generation
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        self._owner._connection_made(
-            self._generation, cast("asyncio.DatagramTransport", transport)
-        )
+        self._owner._connection_made(self._generation, cast("asyncio.DatagramTransport", transport))
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         self._owner.datagram_received(data, addr)
