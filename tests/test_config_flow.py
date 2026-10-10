@@ -35,13 +35,22 @@ HOST = "10.10.1.125"
 KEY_HEX = "ab" * 32
 IV_HEX = "cd" * 16
 
+# The real shapes, verified against the live API: the HOME record spells the IV
+# "udpControlIV" (capital IV) while the DEVICE record spells it "udpcontrolIV".
 HOME = {
     "homeId": "0f1e2d3c4b",
     "udpControlKey": KEY_HEX,
-    "udpcontrolIV": IV_HEX,
+    "udpControlIV": IV_HEX,
     "multicastIP": DEFAULT_MULTICAST,
 }
-DEVICE = {"deviceId": DEVICE_ID, "macAddress": AP_MAC, "deviceName": "AC"}
+DEVICE = {
+    "deviceId": DEVICE_ID,
+    "macAddress": AP_MAC,
+    "deviceName": "AC",
+    "udpControlKey": KEY_HEX,
+    "udpcontrolIV": IV_HEX,  # lowercase, as the firmware itself reads it
+    "multicastIP": DEFAULT_MULTICAST,
+}
 
 
 @pytest.fixture
@@ -472,12 +481,14 @@ async def test_cloud_path_rejects_a_malformed_key(
 ):
     """A malformed key from the cloud is cannot_connect, not a crash."""
     aioclient_mock.post(cf.AUTH_URL, json={"accessToken": "tok"})
+    # Both records must be malformed, because the device record is preferred.
     aioclient_mock.get(
         f"{cf.BASE_URL}/homeManagement/homes",
         json=[{**HOME, "udpControlKey": "ab" * 16}],  # 16 bytes, not 32
     )
     aioclient_mock.get(
-        f"{cf.BASE_URL}/deviceManagement/devices/homeId/{HOME['homeId']}", json=[DEVICE]
+        f"{cf.BASE_URL}/deviceManagement/devices/homeId/{HOME['homeId']}",
+        json=[{**DEVICE, "udpControlKey": "ab" * 16}],
     )
 
     result = await start_user_flow(hass)
@@ -587,3 +598,98 @@ async def test_hex_validation():
     assert cf._is_hex(IV_HEX, 16)
     assert not cf._is_hex(KEY_HEX, 16)
     assert not cf._is_hex("zz" * 32, 32)
+
+
+async def test_cloud_flow_accepts_the_real_home_iv_casing(
+    hass, enable_custom_integrations, cloud, no_network
+):
+    """The live API spells the IV "udpControlIV" on the home record.
+
+    This was a real bug: reading "udpcontrolIV" raised KeyError, which escaped the
+    flow as Home Assistant's "Unknown error occurred".
+    """
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "cloud"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_MOBILE: "9876543210", CONF_PASSWORD: "secret"}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_IV] == IV_HEX
+    assert result["data"][CONF_KEY] == KEY_HEX
+
+
+async def test_cloud_flow_accepts_lowercase_iv_on_the_home(
+    hass, enable_custom_integrations, aioclient_mock, no_network
+):
+    """The other spelling must work too, since the API is inconsistent."""
+    aioclient_mock.post(cf.AUTH_URL, json={"accessToken": "tok"})
+    aioclient_mock.get(
+        f"{cf.BASE_URL}/homeManagement/homes",
+        json=[{**HOME, "udpcontrolIV": IV_HEX}],
+    )
+    aioclient_mock.get(
+        f"{cf.BASE_URL}/deviceManagement/devices/homeId/{HOME['homeId']}",
+        json=[{**DEVICE, "udpcontrolIV": IV_HEX}],
+    )
+
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "cloud"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_MOBILE: "9876543210", CONF_PASSWORD: "secret"}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_IV] == IV_HEX
+
+
+async def test_unexpected_cloud_error_is_a_form_error(
+    hass, enable_custom_integrations, aioclient_mock, no_network
+):
+    """An unexpected response shape must show a message, never "Unknown error"."""
+    aioclient_mock.post(cf.AUTH_URL, json={"accessToken": "tok"})
+    # A dict where the flow expects a list: this used to raise KeyError 0.
+    aioclient_mock.get(f"{cf.BASE_URL}/homeManagement/homes", json={"homes": [HOME]})
+
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "cloud"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_MOBILE: "9876543210", CONF_PASSWORD: "secret"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unknown"}
+
+
+async def test_missing_iv_from_the_cloud_is_cannot_connect(
+    hass, enable_custom_integrations, aioclient_mock, no_network
+):
+    """No IV anywhere means we cannot control the unit: report it properly."""
+    aioclient_mock.post(cf.AUTH_URL, json={"accessToken": "tok"})
+    aioclient_mock.get(
+        f"{cf.BASE_URL}/homeManagement/homes",
+        json=[{k: v for k, v in HOME.items() if "IV" not in k and "IV" not in k.upper()}],
+    )
+    aioclient_mock.get(
+        f"{cf.BASE_URL}/deviceManagement/devices/homeId/{HOME['homeId']}",
+        json=[{k: v for k, v in DEVICE.items() if "IV" not in k.upper()}],
+    )
+
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "cloud"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_MOBILE: "9876543210", CONF_PASSWORD: "secret"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}

@@ -47,6 +47,7 @@
       "invalid_auth": "Invalid mobile number or password.",
       "cannot_connect": "Could not reach the MirAIe service or the air conditioner.",
       "no_devices": "No air conditioner was found on this MirAIe account.",
+      "unknown": "Something went wrong talking to MirAIe. Check the Home Assistant log for details.",
       "invalid_key": "The encryption key must be 32 bytes of hex and the initialisation vector 16 bytes of hex.",
       "invalid_device_id": "The device ID must be 12 hex characters."
     },

@@ -140,6 +140,20 @@ async def _async_first_device(
     return devices[0]
 
 
+def _first_value(mapping: dict[str, Any], *names: str) -> Any:
+    """Return the first present, non-empty value among ``names``.
+
+    The MirAIe API is inconsistent about the casing of the initialisation vector:
+    the home record spells it ``udpControlIV`` while the device-scoped record (the
+    one the firmware itself reads) spells it ``udpcontrolIV``. Accept either.
+    """
+    for name in names:
+        value = mapping.get(name)
+        if value:
+            return value
+    return None
+
+
 async def _async_cloud_data(hass: HomeAssistant, mobile: str, password: str) -> dict[str, Any]:
     """Log in and return everything a config entry needs except the host."""
     session = async_get_clientsession(hass)
@@ -149,17 +163,35 @@ async def _async_cloud_data(hass: HomeAssistant, mobile: str, password: str) -> 
         device = await _async_first_device(session, token, home["homeId"])
     except aiohttp.ClientError as err:
         raise _CannotConnect from err
+    # The device-scoped record is what the firmware itself uses, so prefer it and
+    # fall back to the home record.
+    key = _first_value(device, "udpControlKey") or _first_value(home, "udpControlKey")
+    iv = _first_value(device, "udpControlIV", "udpcontrolIV") or _first_value(
+        home, "udpControlIV", "udpcontrolIV"
+    )
     data = {
-        CONF_DEVICE_ID: device["deviceId"],
-        CONF_KEY: home["udpControlKey"],
-        CONF_IV: home["udpcontrolIV"],
-        CONF_MULTICAST_IP: home.get("multicastIP") or DEFAULT_MULTICAST,
+        CONF_DEVICE_ID: device.get("deviceId"),
+        CONF_KEY: key,
+        CONF_IV: iv,
+        CONF_MULTICAST_IP: (
+            _first_value(device, "multicastIP")
+            or _first_value(home, "multicastIP")
+            or DEFAULT_MULTICAST
+        ),
         CONF_MOBILE: _e164(mobile),
         "ap_mac": device.get("macAddress", ""),
     }
-    # A malformed deviceId or key from the cloud would otherwise surface as an
+    # A missing or malformed value from the cloud would otherwise surface as an
     # unhandled ValueError from the probe ("unknown error" in the UI).
-    if not _is_device_id(data[CONF_DEVICE_ID]) or not _is_hex(data[CONF_KEY], 32):
+    if (
+        not isinstance(data[CONF_DEVICE_ID], str)
+        or not _is_device_id(data[CONF_DEVICE_ID])
+        or not isinstance(data[CONF_KEY], str)
+        or not _is_hex(data[CONF_KEY], 32)
+        or not isinstance(data[CONF_IV], str)
+        or not _is_hex(data[CONF_IV], 16)
+    ):
+        _LOGGER.error("MirAIe returned unusable credentials (deviceId/key/iv missing or malformed)")
         raise _CannotConnect
     return data
 
@@ -221,6 +253,9 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except _NoDevices:
                 errors["base"] = "no_devices"
+            except Exception:  # noqa: BLE001 - never show the user "unknown error"
+                _LOGGER.exception("unexpected error during MirAIe sign-in")
+                errors["base"] = "unknown"
             else:
                 self._cloud = cloud
                 self._mobile = user_input[CONF_MOBILE]
@@ -322,6 +357,9 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except _NoDevices:
                 errors["base"] = "no_devices"
+            except Exception:  # noqa: BLE001 - never show the user "unknown error"
+                _LOGGER.exception("unexpected error during MirAIe reauthentication")
+                errors["base"] = "unknown"
             else:
                 return self.async_update_reload_and_abort(
                     self._get_reauth_entry(),
