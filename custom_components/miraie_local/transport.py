@@ -44,7 +44,7 @@ import json
 import logging
 import socket
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from .const import BROADCAST_PORT, DEFAULT_MULTICAST, DEFAULT_PORT
 from .protocol import (
@@ -139,7 +139,7 @@ class MirAIeLocalTransport(asyncio.DatagramProtocol):
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         """Called by asyncio once the endpoint exists; joins the multicast group."""
-        self._udp_transport = transport
+        self._udp_transport = cast("asyncio.DatagramTransport", transport)
         self._join_multicast()
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:

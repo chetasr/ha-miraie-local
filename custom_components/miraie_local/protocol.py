@@ -133,9 +133,11 @@ def command(kind: str, value: object = None) -> dict:
     if kind == "on":
         return {"ki": 1, "ps": "on"}
     if kind == "temp":
+        if not isinstance(value, (int, float, str)):
+            raise ValueError(f"temp requires a numeric value, got {value!r}")
         try:
             temp = float(value)
-        except (TypeError, ValueError) as err:
+        except ValueError as err:
             raise ValueError(f"temp requires a numeric value, got {value!r}") from err
         if not math.isfinite(temp):
             raise ValueError(f"temp must be finite, got {value!r}")
