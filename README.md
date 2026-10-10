@@ -84,4 +84,5 @@ LAN holding the key can control the unit.
   officially documented by Panasonic and is not supported by the vendor, so it may
   change between firmware versions and is provided as-is.
 - This project is not affiliated with or endorsed by Panasonic. The integration
-  icon is the Panasonic MirAIe app icon and remains the property of Panasonic.
+  icon is the official MirAIe brand asset from the Home Assistant brands
+  repository and remains the property of Panasonic.
