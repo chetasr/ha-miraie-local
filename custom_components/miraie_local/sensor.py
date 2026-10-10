@@ -42,6 +42,7 @@ class MirAIeSensorDescription(SensorEntityDescription):
 SENSORS: tuple[MirAIeSensorDescription, ...] = (
     MirAIeSensorDescription(
         key="rssi",
+        translation_key="rssi",
         name="RSSI",
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -51,6 +52,7 @@ SENSORS: tuple[MirAIeSensorDescription, ...] = (
     ),
     MirAIeSensorDescription(
         key="rmtmp",
+        translation_key="room_temperature",
         name="Room temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -60,6 +62,7 @@ SENSORS: tuple[MirAIeSensorDescription, ...] = (
     ),
     MirAIeSensorDescription(
         key="V",
+        translation_key="firmware_version",
         name="Firmware version",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),

@@ -1,0 +1,82 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "MirAIe Local",
+        "menu_options": {
+          "cloud": "Sign in to MirAIe (recommended)",
+          "manual": "Enter the details manually (advanced)"
+        }
+      },
+      "cloud": {
+        "title": "MirAIe account",
+        "description": "Sign in with your MirAIe account. The integration reads the AC's device id, encryption key and multicast group from it, then finds the unit on your network. Nothing is sent to the cloud again after setup.",
+        "data": {
+          "mobile": "Mobile number",
+          "password": "Password"
+        }
+      },
+      "cloud_host": {
+        "title": "Find the air conditioner",
+        "description": "Leave the address blank to search the local network automatically, or enter the unit's IP address if the search fails. Looking for {device_id}.",
+        "data": {
+          "host": "IP address (optional)"
+        }
+      },
+      "manual": {
+        "title": "Manual setup",
+        "description": "Advanced: enter the unit's details directly, with no cloud account and no internet access.",
+        "data": {
+          "host": "IP address",
+          "device_id": "Device ID",
+          "key": "Encryption key (32 bytes of hex)",
+          "iv": "Initialisation vector (16 bytes of hex)",
+          "multicast_ip": "Multicast group"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "The MirAIe account sign-in is no longer valid. Sign in again to refresh the encryption key.",
+        "data": {
+          "mobile": "Mobile number",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid mobile number or password.",
+      "cannot_connect": "Could not reach the MirAIe service or the air conditioner.",
+      "no_devices": "No air conditioner was found on this MirAIe account.",
+      "invalid_key": "The encryption key must be 32 bytes of hex and the initialisation vector 16 bytes of hex.",
+      "invalid_device_id": "The device ID must be 12 hex characters."
+    },
+    "abort": {
+      "already_configured": "This air conditioner is already set up.",
+      "reauth_successful": "Signed in again successfully."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "MirAIe Local options",
+        "description": "The air conditioner only reports its state when it changes, so the integration nudges it after a period with no report. A shorter interval reacts faster to a dropped report, a longer one sends fewer packets.",
+        "data": {
+          "poll_interval": "Nudge after this many seconds of silence"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "rssi": {
+        "name": "RSSI"
+      },
+      "room_temperature": {
+        "name": "Room temperature"
+      },
+      "firmware_version": {
+        "name": "Firmware version"
+      }
+    }
+  }
+}
