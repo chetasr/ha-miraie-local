@@ -26,7 +26,7 @@ IV = bytes(range(16))    # synthetic
 DEV = "8c1419857fd4"     # deviceId is broadcast in cleartext, so not a secret
 
 # Real 18-byte header observed on the wire from the physical unit:
-#   00 00 | 0c | 8c1419857fd4 | 00 | 0020   (direction 0 = device->app, 32-byte ciphertext)
+#   00 00 | 0c | 8c1419857fd4 | 02 | 0020   (direction 0x02 = device->app, 32-byte ciphertext)
 REAL_HEADER = bytes.fromhex("00000c386331343139383537666434020020")
 
 
@@ -101,6 +101,35 @@ def test_command_rejects_unknown_kind_and_value():
 
 
 def test_enum_tables_match_the_unit():
-    assert FAN_MODES == ["auto", "quiet", "low", "medium", "high"]
-    assert MODES == ["auto", "cool", "dry", "fan"]
+    assert FAN_MODES == ("auto", "quiet", "low", "medium", "high")
+    assert MODES == ("auto", "cool", "dry", "fan")
     assert "heat" not in MODES
+
+
+def test_parse_frame_rejects_empty_and_unaligned_ciphertext():
+    empty = REAL_HEADER[:16] + b"\x00\x00"
+    with pytest.raises(ValueError):
+        parse_frame(KEY, IV, empty)  # declared 0 == actual 0 -> empty ciphertext
+    unaligned = REAL_HEADER[:16] + (17).to_bytes(2, "big") + b"\x01" * 17
+    with pytest.raises(ValueError):
+        parse_frame(KEY, IV, unaligned)                     # declared == actual, not block-aligned
+
+
+def test_build_frame_rejects_bad_device_id_length():
+    with pytest.raises(ValueError):
+        build_frame(KEY, IV, "short", b"x")
+
+
+def test_build_frame_rejects_bad_direction():
+    with pytest.raises(ValueError):
+        build_frame(KEY, IV, DEV, b"x", direction=0x00)
+
+
+def test_disc_payload_rejects_bad_mac():
+    with pytest.raises(ValueError):
+        build_disc_req("b0:81:84:4e:a3")
+
+
+def test_command_rejects_non_finite_temp():
+    with pytest.raises(ValueError):
+        command("temp", float("nan"))

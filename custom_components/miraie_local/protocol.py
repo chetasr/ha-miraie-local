@@ -25,6 +25,8 @@ intentionally pure - bytes in, bytes out, no I/O and no module state - so it can
 unit-tested in isolation.
 """
 
+import math
+
 from .crypto import aes_cbc_decrypt, aes_cbc_encrypt
 
 DIR_APP_TO_DEVICE = 0x01
@@ -34,9 +36,11 @@ _HEADER_LEN = 18
 _DEVICE_ID_LEN = 12
 _DISC_PAYLOAD_LEN = 32
 
-FAN_MODES = ["auto", "quiet", "low", "medium", "high"]
-MODES = ["auto", "cool", "dry", "fan"]  # firmware "acmd"; the unit has NO heat mode
-HVAC_MODES = MODES  # alias kept for the plan's enum-table name
+FAN_MODES = ("auto", "quiet", "low", "medium", "high")
+MODES = ("auto", "cool", "dry", "fan")  # firmware "acmd"; the unit has NO heat mode
+# Alias kept for the plan's enum-table name. These are firmware "acmd" values;
+# HA's HVACMode spells fan mode "fan_only", not "fan".
+HVAC_MODES = MODES
 
 
 def build_frame(
@@ -57,6 +61,11 @@ def build_frame(
         raise ValueError(
             f"deviceId must be {_DEVICE_ID_LEN} ASCII bytes, got {len(device_bytes)}"
         )
+    if direction not in (DIR_APP_TO_DEVICE, DIR_DEV_TO_APP):
+        raise ValueError(
+            f"direction must be 0x{DIR_APP_TO_DEVICE:02x} or 0x{DIR_DEV_TO_APP:02x}, "
+            f"got 0x{direction:02x}"
+        )
     ciphertext = aes_cbc_encrypt(key, iv, plaintext)
     header = (
         b"\x00"
@@ -75,6 +84,9 @@ def parse_frame(key: bytes, iv: bytes, raw: bytes) -> tuple[int, bytes]:
     a deviceId length other than 12, a declared ciphertext length that does not
     match the actual payload, or a ciphertext that is not a whole number of
     16-byte blocks. Malformed frames are never silently accepted.
+
+    The deviceId at ``raw[3:15]`` is NOT validated against a configured device;
+    the caller MUST compare it itself.
     """
     if len(raw) < _HEADER_LEN:
         raise ValueError(f"frame shorter than {_HEADER_LEN} bytes: {len(raw)}")
@@ -92,6 +104,8 @@ def parse_frame(key: bytes, iv: bytes, raw: bytes) -> tuple[int, bytes]:
 def _disc_payload(prefix: str, ap_mac: str) -> bytes:
     """Return ``<prefix><MAC>`` zero-padded to 32 bytes (space padding gets no reply)."""
     mac = ap_mac.replace(":", "").upper()
+    if len(mac) != 12:
+        raise ValueError(f"AP MAC must be 12 hex chars, got {ap_mac!r}")
     return f"{prefix}{mac}".encode("ascii").ljust(_DISC_PAYLOAD_LEN, b"\x00")
 
 
@@ -120,10 +134,12 @@ def command(kind: str, value: object = None) -> dict:
         return {"ki": 1, "ps": "on"}
     if kind == "temp":
         try:
-            actmp = f"{float(value):.1f}"
+            temp = float(value)
         except (TypeError, ValueError) as err:
             raise ValueError(f"temp requires a numeric value, got {value!r}") from err
-        return {"ki": 2, "actmp": actmp, "ps": "on"}
+        if not math.isfinite(temp):
+            raise ValueError(f"temp must be finite, got {value!r}")
+        return {"ki": 2, "actmp": f"{temp:.1f}", "ps": "on"}
     if kind == "mode":
         if value not in MODES:
             raise ValueError(f"unknown mode {value!r}, expected one of {MODES}")
