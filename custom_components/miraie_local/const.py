@@ -19,3 +19,8 @@ CONF_POLL_INTERVAL = "poll_interval"
 # broadcast resets it - so it is not a heartbeat (decision D5).
 DEFAULT_POLL_INTERVAL = 60
 MIN_POLL_INTERVAL = 15
+
+# How many consecutive unanswered nudges before the AC is treated as
+# unavailable. Generous because the device drops off the network for about a
+# minute around a power-off.
+MISSED_NUDGES_BEFORE_UNAVAILABLE = 3

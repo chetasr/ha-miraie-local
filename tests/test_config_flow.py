@@ -13,6 +13,7 @@ from homeassistant.const import CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import custom_components.miraie_local as init_module
 from custom_components.miraie_local import config_flow as cf
 from custom_components.miraie_local.const import (
     CONF_DEVICE_ID,
@@ -54,9 +55,33 @@ def cloud(aioclient_mock):
     return aioclient_mock
 
 
+STATUS = {"ps": "off", "actmp": "25.0", "rmtmp": "26.5"}
+
+
+class FakeTransport:
+    """Stands in for MirAIeLocalTransport so no UDP socket is opened.
+
+    Home Assistant sets a config entry up as soon as a flow creates it, so the
+    setup path needs a transport that does not bind port 5002.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.started = False
+        self.stopped = False
+
+    async def async_start(self):
+        self.started = True
+
+    async def async_stop(self):
+        self.stopped = True
+
+    async def async_query(self):
+        return STATUS
+
+
 @pytest.fixture
 def no_network(monkeypatch):
-    """Stub discovery and probing so no UDP socket is opened."""
+    """Stub discovery, probing and setup so no UDP socket is opened."""
 
     async def _discover(ap_mac, device_id, **kwargs):
         return HOST
@@ -66,6 +91,9 @@ def no_network(monkeypatch):
 
     monkeypatch.setattr(cf, "async_discover", _discover)
     monkeypatch.setattr(cf, "_async_probe", _probe)
+    monkeypatch.setattr(init_module, "MirAIeLocalTransport", FakeTransport)
+    monkeypatch.setattr(cf, "MirAIeLocalTransport", FakeTransport)
+    return FakeTransport
 
 
 async def start_user_flow(hass):
@@ -210,7 +238,7 @@ async def test_cannot_connect_when_the_probe_is_silent(
 
 
 async def test_manual_advanced_path_needs_no_cloud(
-    hass, enable_custom_integrations, monkeypatch
+    hass, enable_custom_integrations, no_network, monkeypatch
 ):
     """The advanced path makes no cloud call at all (it does probe the AC)."""
 
