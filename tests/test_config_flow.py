@@ -209,8 +209,15 @@ async def test_cannot_connect_when_the_probe_is_silent(
     assert result["errors"] == {"base": "cannot_connect"}
 
 
-async def test_manual_advanced_path_needs_no_network(hass, enable_custom_integrations, no_network):
-    """The advanced path creates an entry with no cloud calls at all."""
+async def test_manual_advanced_path_needs_no_cloud(
+    hass, enable_custom_integrations, monkeypatch
+):
+    """The advanced path makes no cloud call at all (it does probe the AC)."""
+
+    async def _probe(hass_, data, host):
+        return None
+
+    monkeypatch.setattr(cf, "_async_probe", _probe)
     result = await start_user_flow(hass)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"next_step_id": "manual"}
@@ -359,6 +366,188 @@ async def test_options_reject_a_too_short_interval(hass, enable_custom_integrati
         await hass.config_entries.options.async_configure(
             result["flow_id"], {CONF_POLL_INTERVAL: 5}
         )
+
+
+async def test_manual_rejects_a_bad_device_id(hass, enable_custom_integrations, no_network):
+    """An 11-char deviceId would raise from build_frame, so refuse it here."""
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "manual"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_HOST: HOST,
+            CONF_DEVICE_ID: "8c1419857fd",  # 11 chars, not 12
+            CONF_KEY: KEY_HEX,
+            CONF_IV: IV_HEX,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_device_id"}
+
+
+async def test_manual_maps_a_probe_failure_to_cannot_connect(
+    hass, enable_custom_integrations, no_network, monkeypatch
+):
+    """A probe that cannot reach the AC is a form error, not a crash."""
+
+    async def _probe(hass_, data, host):
+        raise cf._CannotConnect
+
+    monkeypatch.setattr(cf, "_async_probe", _probe)
+
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "manual"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_HOST: HOST,
+            CONF_DEVICE_ID: DEVICE_ID,
+            CONF_KEY: KEY_HEX,
+            CONF_IV: IV_HEX,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_manual_maps_a_malformed_key_to_cannot_connect(
+    hass, enable_custom_integrations, no_network, monkeypatch
+):
+    """A ValueError from the probe must not escape as "unknown error"."""
+
+    async def _probe(hass_, data, host):
+        raise ValueError("deviceId must be 12 ASCII bytes")
+
+    monkeypatch.setattr(cf, "_async_probe", _probe)
+
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "manual"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_HOST: HOST,
+            CONF_DEVICE_ID: DEVICE_ID,
+            CONF_KEY: KEY_HEX,
+            CONF_IV: IV_HEX,
+        },
+    )
+
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_cloud_path_rejects_a_malformed_key(
+    hass, enable_custom_integrations, aioclient_mock, no_network
+):
+    """A malformed key from the cloud is cannot_connect, not a crash."""
+    aioclient_mock.post(cf.AUTH_URL, json={"accessToken": "tok"})
+    aioclient_mock.get(
+        f"{cf.BASE_URL}/homeManagement/homes",
+        json=[{**HOME, "udpControlKey": "ab" * 16}],  # 16 bytes, not 32
+    )
+    aioclient_mock.get(
+        f"{cf.BASE_URL}/deviceManagement/devices/homeId/{HOME['homeId']}", json=[DEVICE]
+    )
+
+    result = await start_user_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "cloud"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_MOBILE: "9876543210", CONF_PASSWORD: "secret"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+class _FakeHass:
+    """Just enough HomeAssistant for the probe: it only needs a loop."""
+
+    loop = None
+
+
+class _FakeTransport:
+    """Stands in for MirAIeLocalTransport so the probe opens no socket."""
+
+    instances: list[_FakeTransport] = []
+    fail_start: Exception | None = None
+    fail_query: Exception | None = None
+
+    def __init__(self, *args, **kwargs):
+        self.started = False
+        self.stopped = False
+        self.kwargs = kwargs
+        _FakeTransport.instances.append(self)
+
+    async def async_start(self):
+        if _FakeTransport.fail_start is not None:
+            raise _FakeTransport.fail_start
+        self.started = True
+
+    async def async_query(self):
+        if _FakeTransport.fail_query is not None:
+            raise _FakeTransport.fail_query
+        return {"ps": "off"}
+
+    async def async_stop(self):
+        self.stopped = True
+
+
+@pytest.fixture
+def fake_transport(monkeypatch):
+    """Patch the transport the probe builds, so no UDP socket is opened."""
+    _FakeTransport.instances = []
+    _FakeTransport.fail_start = None
+    _FakeTransport.fail_query = None
+    monkeypatch.setattr(cf, "MirAIeLocalTransport", _FakeTransport)
+    return _FakeTransport
+
+
+def _probe_data():
+    return {CONF_DEVICE_ID: DEVICE_ID, CONF_KEY: KEY_HEX, CONF_IV: IV_HEX}
+
+
+async def test_probe_passes_when_the_ac_answers(fake_transport):
+    """The happy path: the probe starts, asks, and always stops."""
+    await cf._async_probe(_FakeHass(), _probe_data(), HOST)
+
+    transport = fake_transport.instances[0]
+    assert transport.started is True
+    assert transport.stopped is True
+
+
+async def test_probe_maps_a_silent_ac_to_cannot_connect(fake_transport):
+    """A silent AC (query timeout) must become _CannotConnect, and still stop."""
+    fake_transport.fail_query = TimeoutError
+
+    with pytest.raises(cf._CannotConnect):
+        await cf._async_probe(_FakeHass(), _probe_data(), HOST)
+
+    assert fake_transport.instances[0].stopped is True
+
+
+async def test_probe_maps_a_bind_failure_to_cannot_connect(fake_transport):
+    """A bind failure (OSError) must not escape as "unknown error"."""
+    fake_transport.fail_start = OSError("Address already in use")
+
+    with pytest.raises(cf._CannotConnect):
+        await cf._async_probe(_FakeHass(), _probe_data(), HOST)
+
+
+async def test_probe_maps_a_malformed_device_id_to_cannot_connect(fake_transport):
+    """A bad deviceId raises ValueError from build_frame during the probe."""
+    fake_transport.fail_start = ValueError("deviceId must be 12 ASCII bytes")
+
+    with pytest.raises(cf._CannotConnect):
+        await cf._async_probe(_FakeHass(), _probe_data(), HOST)
 
 
 async def test_e164_normalisation():

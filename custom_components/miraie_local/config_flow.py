@@ -149,7 +149,7 @@ async def _async_cloud_data(hass: HomeAssistant, mobile: str, password: str) -> 
         device = await _async_first_device(session, token, home["homeId"])
     except aiohttp.ClientError as err:
         raise _CannotConnect from err
-    return {
+    data = {
         CONF_DEVICE_ID: device["deviceId"],
         CONF_KEY: home["udpControlKey"],
         CONF_IV: home["udpcontrolIV"],
@@ -157,21 +157,34 @@ async def _async_cloud_data(hass: HomeAssistant, mobile: str, password: str) -> 
         CONF_MOBILE: _e164(mobile),
         "ap_mac": device.get("macAddress", ""),
     }
+    # A malformed deviceId or key from the cloud would otherwise surface as an
+    # unhandled ValueError from the probe ("unknown error" in the UI).
+    if not _is_device_id(data[CONF_DEVICE_ID]) or not _is_hex(data[CONF_KEY], 32):
+        raise _CannotConnect
+    return data
 
 
 async def _async_probe(hass: HomeAssistant, data: dict[str, Any], host: str) -> None:
-    """Start a transport, ask once, stop. Raises _CannotConnect if silent."""
-    transport = MirAIeLocalTransport(
-        hass.loop,
-        host,
-        data[CONF_DEVICE_ID],
-        bytes.fromhex(data[CONF_KEY]),
-        bytes.fromhex(data[CONF_IV]),
-        on_status=lambda _status: None,
-        multicast=data.get(CONF_MULTICAST_IP, DEFAULT_MULTICAST),
-        timeout=PROBE_TIMEOUT,
-    )
-    await transport.async_start()
+    """Start a transport, ask once, stop. Raises _CannotConnect if silent.
+
+    A malformed deviceId or key/IV also surfaces here (build_frame and
+    bytes.fromhex raise ValueError), so those are mapped too rather than escaping
+    as an unhandled exception and showing the user "unknown error".
+    """
+    try:
+        transport = MirAIeLocalTransport(
+            hass.loop,
+            host,
+            data[CONF_DEVICE_ID],
+            bytes.fromhex(data[CONF_KEY]),
+            bytes.fromhex(data[CONF_IV]),
+            on_status=lambda _status: None,
+            multicast=data.get(CONF_MULTICAST_IP, DEFAULT_MULTICAST),
+            timeout=PROBE_TIMEOUT,
+        )
+        await transport.async_start()
+    except (OSError, ValueError) as err:
+        raise _CannotConnect from err
     try:
         await transport.async_query()
     except TimeoutError as err:
@@ -189,7 +202,6 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialise the flow state."""
         self._cloud: dict[str, Any] = {}
         self._mobile = ""
-        self._password = ""
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Offer the normal cloud login, with a manual path for offline use."""
@@ -212,7 +224,6 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 self._cloud = cloud
                 self._mobile = user_input[CONF_MOBILE]
-                self._password = user_input[CONF_PASSWORD]
                 return await self.async_step_cloud_host()
 
         return self.async_show_form(
@@ -242,7 +253,7 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 try:
                     await _async_probe(self.hass, self._cloud, host)
-                except _CannotConnect:
+                except (_CannotConnect, ValueError):
                     errors["base"] = "cannot_connect"
                 else:
                     return self._async_create_entry(host)
@@ -265,12 +276,14 @@ class MirAIeLocalConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_IV: user_input[CONF_IV].strip(),
                 CONF_MULTICAST_IP: user_input.get(CONF_MULTICAST_IP) or DEFAULT_MULTICAST,
             }
-            if not _is_hex(data[CONF_KEY], 32) or not _is_hex(data[CONF_IV], 16):
+            if not _is_device_id(data[CONF_DEVICE_ID]):
+                errors["base"] = "invalid_device_id"
+            elif not _is_hex(data[CONF_KEY], 32) or not _is_hex(data[CONF_IV], 16):
                 errors["base"] = "invalid_key"
             else:
                 try:
                     await _async_probe(self.hass, data, data[CONF_HOST])
-                except _CannotConnect:
+                except (_CannotConnect, ValueError):
                     errors["base"] = "cannot_connect"
                 else:
                     return self._async_create_entry(data[CONF_HOST], data)
@@ -360,6 +373,11 @@ def _is_hex(value: str, expected_bytes: int) -> bool:
         return len(bytes.fromhex(value)) == expected_bytes
     except ValueError:
         return False
+
+
+def _is_device_id(value: str) -> bool:
+    """Is ``value`` the 12 hex CHARACTERS the frame header carries (6 bytes)?"""
+    return len(value) == 12 and _is_hex(value, 6)
 
 
 class MirAIeLocalOptionsFlow(OptionsFlow):

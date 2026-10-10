@@ -37,6 +37,7 @@ either style, whereas mixing the two fails with ``EADDRINUSE``.
 ``loop.create_datagram_endpoint`` refuses both options at once, so the socket is
 created here and handed over via ``sock=``.
 """
+from __future__ import annotations
 
 import asyncio
 import contextlib
@@ -98,11 +99,38 @@ def _make_socket(bind_port: int) -> socket.socket:
     return sock
 
 
-class MirAIeLocalTransport(asyncio.DatagramProtocol):
+class _ReceiveProtocol(asyncio.DatagramProtocol):
+    """One endpoint's protocol, tagged with the generation that made it.
+
+    ``async_stop`` closes the endpoint, but asyncio delivers ``connection_lost``
+    later. If the same instance were started again in between, that stale callback
+    would clear the live transport, so each endpoint carries its generation and only
+    the matching one is allowed to clear it.
+    """
+
+    def __init__(self, owner: MirAIeLocalTransport, generation: int) -> None:
+        self._owner = owner
+        self._generation = generation
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        self._owner._connection_made(
+            self._generation, cast("asyncio.DatagramTransport", transport)
+        )
+
+    def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
+        self._owner.datagram_received(data, addr)
+
+    def error_received(self, exc: Exception) -> None:
+        self._owner._error_received(exc)
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        self._owner._connection_lost(self._generation)
+
+
+class MirAIeLocalTransport:
     """UDP transport for a single MirAIe AC.
 
-    Also the asyncio datagram protocol, so ``datagram_received`` can be driven
-    directly by tests without a real socket.
+    ``datagram_received`` is public so tests can drive it without a real socket.
     """
 
     def __init__(
@@ -134,12 +162,16 @@ class MirAIeLocalTransport(asyncio.DatagramProtocol):
         self._waiters: list[asyncio.Future[dict[str, Any]]] = []
         self._last_status: dict[str, Any] | None = None
         self._sid = 0
+        self._generation = 0
 
-    # ---- asyncio.DatagramProtocol ------------------------------------
+    # ---- protocol callbacks -------------------------------------------
 
-    def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        """Called by asyncio once the endpoint exists; joins the multicast group."""
-        self._udp_transport = cast("asyncio.DatagramTransport", transport)
+    def _connection_made(self, generation: int, transport: asyncio.DatagramTransport) -> None:
+        """The endpoint for ``generation`` exists; join the multicast group."""
+        if generation != self._generation:
+            transport.close()  # a stale endpoint we already replaced
+            return
+        self._udp_transport = transport
         self._join_multicast()
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
@@ -153,13 +185,14 @@ class MirAIeLocalTransport(asyncio.DatagramProtocol):
                 waiter.set_result(status)
         self._on_status(status)
 
-    def error_received(self, exc: Exception) -> None:
+    def _error_received(self, exc: Exception) -> None:
         """A UDP error (e.g. ICMP port unreachable) is not fatal; log it."""
         _LOGGER.debug("UDP error for %s: %s", self._host, exc)
 
-    def connection_lost(self, exc: Exception | None) -> None:
-        """The endpoint is gone; further sends raise until ``async_start`` again."""
-        self._udp_transport = None
+    def _connection_lost(self, generation: int) -> None:
+        """Only the live endpoint may clear the transport (see _ReceiveProtocol)."""
+        if generation == self._generation:
+            self._udp_transport = None
 
     # ---- public interface ---------------------------------------------
 
@@ -173,8 +206,12 @@ class MirAIeLocalTransport(asyncio.DatagramProtocol):
         if self._udp_transport is not None:
             return
         sock = _make_socket(self._broadcast_port)
+        self._generation += 1
+        generation = self._generation
         try:
-            await self._loop.create_datagram_endpoint(lambda: self, sock=sock)
+            await self._loop.create_datagram_endpoint(
+                lambda: _ReceiveProtocol(self, generation), sock=sock
+            )
         except Exception:
             sock.close()
             raise
@@ -329,14 +366,20 @@ async def async_discover(
     _LOGGER.debug("discovering %s via %s:%s", device_id, BROADCAST_ADDRESS, port)
 
     sock = _make_socket(broadcast_port)
-    transport, protocol = await loop.create_datagram_endpoint(_DiscoveryProtocol, sock=sock)
     try:
-        for _ in range(max(1, int(timeout / _DISCOVERY_RETRY))):
+        transport, protocol = await loop.create_datagram_endpoint(_DiscoveryProtocol, sock=sock)
+    except Exception:
+        sock.close()
+        raise
+    try:
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
             done, _ = await asyncio.wait({found}, timeout=_DISCOVERY_RETRY)
             if done:
                 return found.result()
+            if asyncio.get_running_loop().time() >= deadline:
+                _LOGGER.debug("no discovery reply from %s", device_id)
+                return None
             protocol.send_request()
-        _LOGGER.debug("no discovery reply from %s", device_id)
-        return None
     finally:
         transport.close()

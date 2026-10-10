@@ -199,6 +199,34 @@ async def test_async_send_does_not_mutate_the_callers_payload(fake_loop):
     assert payload == {"ki": 1, "ps": "on"}
 
 
+async def test_restart_after_stop_keeps_the_new_transport(fake_loop):
+    """A stale endpoint's connection_lost must not clear the live transport.
+
+    asyncio delivers connection_lost after close(), so a stop-then-start would
+    otherwise leave sends raising RuntimeError against a healthy new socket.
+    """
+    transport, _ = make_transport(fake_loop)
+    await transport.async_start()
+    stale_protocol = fake_loop.protocols[0]
+    await transport.async_stop()
+    await transport.async_start()
+
+    stale_protocol.connection_lost(None)  # arrives late, from the old endpoint
+
+    await transport.async_send({"ki": 1, "ps": "on"})
+    assert len(fake_loop.transport.sent) == 1
+
+
+async def test_datagram_received_is_reachable_through_the_protocol(fake_loop):
+    """The endpoint's protocol forwards datagrams to the transport."""
+    transport, statuses = make_transport(fake_loop)
+    await transport.async_start()
+
+    fake_loop.protocols[0].datagram_received(status_frame(), AC)
+
+    assert statuses == [STATUS]
+
+
 async def test_async_send_before_start_raises(fake_loop):
     transport, _ = make_transport(fake_loop)
     with pytest.raises(RuntimeError):
