@@ -1,4 +1,4 @@
-# MirAIe Local
+# MirAIe
 
 A Home Assistant custom integration for **local (LAN, UDP) control** of a Panasonic
 MirAIe Wi-Fi air conditioner.
@@ -23,13 +23,13 @@ firmware versions and is provided as-is.
 2. In Home Assistant, open **HACS → Integrations**.
 3. Open the three-dot menu (top right) and choose **Custom repositories**.
 4. Add `https://github.com/chetasr/ha-miraie-local` with category **Integration**.
-5. Search for **MirAIe Local** in HACS and download it.
+5. Search for **MirAIe** in HACS and download it.
 6. Restart Home Assistant.
 
 ## Setup
 
 1. Go to **Settings → Devices & Services → Add Integration**.
-2. Search for **MirAIe Local** and select it.
+2. Search for **MirAIe** and select it.
 3. Sign in with your MirAIe account (mobile number and password). The
    integration reads the unit's device ID, encryption key and multicast group from
    the account and then finds the air conditioner on your network itself.
@@ -41,7 +41,8 @@ the integration talks to the unit over the LAN only, and the cloud is not contac
 
 ## Supported entities
 
-- **Climate** — the air conditioner (power, mode, target temperature, fan speed).
+- **Climate** — the air conditioner (power, mode, target temperature 16-30 °C in
+  1 °C steps, fan speed).
 - **Diagnostic sensors** — signal strength, room temperature and firmware version.
 
 Setting a temperature, mode or fan speed also powers the unit on, because setting a
@@ -82,4 +83,5 @@ LAN holding the key can control the unit.
 - The local UDP protocol was reverse engineered from the device firmware. It is not
   officially documented by Panasonic and is not supported by the vendor, so it may
   change between firmware versions and is provided as-is.
-- This project is not affiliated with or endorsed by Panasonic.
+- This project is not affiliated with or endorsed by Panasonic. The integration
+  icon is the Panasonic MirAIe app icon and remains the property of Panasonic.

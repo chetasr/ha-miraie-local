@@ -18,7 +18,7 @@ async def test_attributes(hass, setup_entry):
     assert state.attributes["fan_modes"] == ["auto", "quiet", "low", "medium", "high"]
     assert state.attributes["min_temp"] == 16.0
     assert state.attributes["max_temp"] == 30.0
-    assert state.attributes["target_temp_step"] == 0.5
+    assert state.attributes["target_temp_step"] == 1.0
     assert state.attributes["current_temperature"] == 26.5  # rmtmp
     assert state.attributes["temperature"] == 24.0  # actmp
     assert state.state == "off"  # ps off
@@ -47,13 +47,13 @@ async def test_set_temperature_while_off_powers_on(hass, setup_entry, transport)
     await hass.services.async_call(
         "climate",
         "set_temperature",
-        {"entity_id": CLIMATE_ENTITY_ID, "temperature": 25.5},
+        {"entity_id": CLIMATE_ENTITY_ID, "temperature": 26.0},
         blocking=True,
     )
 
     frame = sent(transport)[-1]
     assert frame["ps"] == "on"
-    assert frame["actmp"] == "25.5"
+    assert frame["actmp"] == "26.0"
 
 
 async def test_turn_off_sends_ps_off(hass, setup_entry, transport):

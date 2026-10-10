@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "MirAIe Local",
+        "title": "MirAIe",
         "menu_options": {
           "cloud": "Sign in to MirAIe (recommended)",
           "manual": "Enter the details manually (advanced)"
@@ -59,7 +59,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "MirAIe Local options",
+        "title": "MirAIe options",
         "description": "The air conditioner only reports its state when it changes, so the integration nudges it after a period with no report. A shorter interval reacts faster to a dropped report, a longer one sends fewer packets.",
         "data": {
           "poll_interval": "Nudge after this many seconds of silence"

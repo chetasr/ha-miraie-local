@@ -46,6 +46,7 @@ def test_manifest_keys_are_sorted_as_hassfest_requires():
 
 def test_manifest_metadata_values():
     m = json.loads(MANIFEST_PATH.read_text())
+    assert m["name"] == "MirAIe"
     assert m["codeowners"] == ["@chetasr"]
     assert m["integration_type"] == "device"
     assert m["config_flow"] is True
@@ -69,6 +70,6 @@ def test_const_values():
 
 def test_hacs_json_valid():
     h = json.loads(HACS_PATH.read_text())
-    assert h["name"] == "MirAIe Local"
+    assert h["name"] == "MirAIe"
     assert h["homeassistant"] == "2026.3.0"
     assert h["render_readme"] is True

@@ -1,6 +1,6 @@
 {
   "domain": "miraie_local",
-  "name": "MirAIe Local",
+  "name": "MirAIe",
   "codeowners": [
     "@chetasr"
   ],
@@ -13,5 +13,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/chetasr/ha-miraie-local/issues",
   "quality_scale": "bronze",
-  "version": "0.1.1"
+  "version": "0.1.2"
 }

@@ -74,7 +74,7 @@ class MirAIeClimate(CoordinatorEntity[MirAIeLocalCoordinator], ClimateEntity):
     _attr_fan_modes = list(FAN_MODES)
     _attr_min_temp = 16.0
     _attr_max_temp = 30.0
-    _attr_target_temperature_step = 0.5
+    _attr_target_temperature_step = 1.0
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.FAN_MODE
